@@ -1,18 +1,19 @@
 # Imports
 import argparse
-
-from mxnet import nd, image
+import json
+import math
+import os
 
 from gluoncv.data import ImageNet1kAttr
 from gluoncv.data.transforms.presets.imagenet import transform_eval
 from gluoncv.model_zoo import get_model
+from mxnet import nd, image
 
-import os, json, math
 
 # Takes a string and makes it a boolean
 def str2bool(v):
     if isinstance(v, bool):
-       return v
+        return v
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
@@ -20,33 +21,38 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+
 # Terminal command inputs
-parser = argparse.ArgumentParser(description='Predict ImageNet classes for inputed images')
-parser.add_argument('--model', type=str, required=True,
-                    help='name of the model to use')
+def get_args():
+    parser = argparse.ArgumentParser(description='Predict ImageNet classes for inputed images')
+    parser.add_argument('--model', type=str, required=True,
+                        help='name of the model to use')
 
-parser.add_argument('--saved-params', type=str, default='',
-                    help='path to the saved model parameters')
+    parser.add_argument('--saved-params', type=str, default='',
+                        help='path to the saved model parameters')
 
-parser.add_argument('--input-fldr', type=str, required=True,
-                    help='path to the input picture')
+    parser.add_argument('--input-fldr', type=str, required=True,
+                        help='path to the input picture')
 
-parser.add_argument('--extra-fldrs', type=str2bool, default=False,
-                    help='Make `True` if you want subfolders to be searched')
+    parser.add_argument('--extra-fldrs', type=str2bool, default=False,
+                        help='Make `True` if you want subfolders to be searched')
 
-parser.add_argument('--save-to-file', type=str2bool, default=False,
-                    help='Set to `True` to save the results to a json file')
+    parser.add_argument('--save-to-file', type=str2bool, default=False,
+                        help='Set to `True` to save the results to a json file')
 
-parser.add_argument('--display-in-terminal', type=str2bool, default=True,
-                    help='Set to `False` to have it not displayed in the console')
+    parser.add_argument('--display-in-terminal', type=str2bool, default=True,
+                        help='Set to `False` to have it not displayed in the console')
 
-parser.add_argument('--top-k', type=int, default=5,
-                    help='The number of rankings you want displayed')
+    parser.add_argument('--top-k', type=int, default=5,
+                        help='The number of rankings you want displayed')
 
-opt = parser.parse_args()
+    return parser.parse_args()
+
+
+opt = get_args()
 
 # Takes in what directory the user wants the outputs saved too, if wanted
-directory = input('Choose a directory to save the file too (only list folders, '+
+directory = input('Choose a directory to save the file too (only list folders, ' +
                   'the next input will be the file name): ') if opt.save_to_file else None
 
 file_name = input('Choose a file name  (do not include the extension): ') if opt.save_to_file else None
@@ -66,28 +72,31 @@ else:
 # Stores the saved picture directories
 pictures = []
 
+
 # Recurses through folders
-def find_all_folders(input_file=None):
+def find_all_images(input_file=None):
     # Attempts scan the file provided, seeing if it is a folder
-    try:
-        # If inputed true, this code will recurse through any folders in the provided folder
-        for file in os.scandir(opt.input_fldr if input_file is None else input_file):
-            if opt.extra_fldrs:
-                find_all_folders(os.path.abspath(files))
-                
-    # If the file inputed isn't a folder, then it adds it the picture array
-    except Exception:
-        # Grabs the non-folder file extension and checks if it is one of the images types listed
-        name, ext = os.path.splitext(os.path.basename(file))
-        if ext in ['.jpeg','.jpg','.png']:
-            pictures.append(file)
-            
-            
+    for file in os.scandir(opt.input_fldr if input_file is None else input_file):
+        try:
+            # If inputed true, this code will recurse through any folders in the provided folder
+            for files in os.scandir(file):
+                if opt.extra_fldrs:
+                    find_all_images(os.path.abspath(files))
+
+        # If the file inputed isn't a folder, then it adds it the picture array
+        except Exception:
+            # Grabs the non-folder file extension and checks if it is one of the images types listed
+            name, ext = os.path.splitext(os.path.basename(file))
+            if ext in ['.jpeg', '.jpg', '.png']:
+                pictures.append(file)
+
+
 # Predicts the images
 def pred_images():
+
     # Get the image directories
-    find_all_folders()
-    
+    find_all_images()
+
     # Dictionary that stores all the information to be saved to a file
     save_data = {}
 
@@ -96,8 +105,8 @@ def pred_images():
         # Updates to the right directory
         os.chdir(os.path.dirname(images))
 
-        save_data[os.path.basename(images)] = {rank+1: {} for rank in range(opt.top_k)}
-        
+        save_data[os.path.basename(images)] = {rank + 1: {} for rank in range(opt.top_k)}
+
         # Load Images
         img = image.imread(os.path.basename(images))
 
@@ -106,22 +115,22 @@ def pred_images():
 
         # Prediction
         pred = net(img)
-        
+
         # Prints the prediction
         ind = nd.topk(pred, k=opt.top_k)[0].astype('int')
 
         for i in range(opt.top_k):
             pred_obj = classes[ind[i].asscalar()]
             pred_score = nd.softmax(pred)[0][ind[i]].asscalar()
-            
+
             if opt.display_in_terminal:
                 if i == 0:
                     print(f'\n{os.path.basename(images)} is classified to be:')
-                    
-              print(f'\t{pred_obj}, with probability {math.floor(pred_score*1000)/1000}')
 
-            save_data[os.path.basename(images)][i+1]['class'] = classes[ind[i].asscalar()]
-            save_data[os.path.basename(images)][i+1]['confidence'] = str(nd.softmax(pred)[0][ind[i]].asscalar())
+            print(f'\t{pred_obj}, with probability {math.floor(pred_score * 1000) / 1000}')
+
+            save_data[os.path.basename(images)][i + 1]['class'] = classes[ind[i].asscalar()]
+            save_data[os.path.basename(images)][i + 1]['confidence'] = str(nd.softmax(pred)[0][ind[i]].asscalar())
 
     # Saves the results to a json file (if requested to do so)
     if opt.save_to_file:
@@ -129,13 +138,14 @@ def pred_images():
             os.mkdir(directory)
         except FileExistsError:
             # Nothing will happen if the file exists because it will simply put it in that directory
-            None
-        
+            pass
+
         # Sets the proper directory
         os.chdir(directory)
 
         # Saves the data
-        with open(file_name+".json","w") as file_obj:
+        with open(file_name + ".json", "w") as file_obj:
             json.dump(save_data, file_obj, indent=2, sort_keys=True)
+
 
 pred_images()
