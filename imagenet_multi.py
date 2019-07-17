@@ -7,8 +7,7 @@ from gluoncv.data import ImageNet1kAttr
 from gluoncv.data.transforms.presets.imagenet import transform_eval
 from gluoncv.model_zoo import get_model
 
-import os
-import json
+import os, json, math
 
 # Takes a string and makes it a boolean
 def str2bool(v):
@@ -68,11 +67,11 @@ else:
 pictures = []
 
 # Recurses through folders
-def find_all_folders(file):
+def find_all_folders(input_file=None):
     # Attempts scan the file provided, seeing if it is a folder
     try:
         # If inputed true, this code will recurse through any folders in the provided folder
-        for files in os.scandir(file):
+        for file in os.scandir(opt.input_fldr if input_file is None else input_file):
             if opt.extra_fldrs:
                 find_all_folders(os.path.abspath(files))
                 
@@ -83,16 +82,11 @@ def find_all_folders(file):
         if ext in ['.jpeg','.jpg','.png']:
             pictures.append(file)
             
-# Reads through the original folder
-def get_images():    
-    # Reads the files inside the directory provided
-    for file in os.scandir(opt.input_fldr):
-        find_all_folders(os.path.abspath(file))
-
+            
 # Predicts the images
 def pred_images():
     # Get the image directories
-    get_images()
+    find_all_folders()
     
     # Dictionary that stores all the information to be saved to a file
     save_data = {}
@@ -117,12 +111,14 @@ def pred_images():
         ind = nd.topk(pred, k=opt.top_k)[0].astype('int')
 
         for i in range(opt.top_k):
+            pred_obj = classes[ind[i].asscalar()]
+            pred_score = nd.softmax(pred)[0][ind[i]].asscalar()
+            
             if opt.display_in_terminal:
                 if i == 0:
                     print(f'\n{os.path.basename(images)} is classified to be:')
                     
-                print('\t[%s], with probability %.3f.'%
-                   (classes[ind[i].asscalar()], nd.softmax(pred)[0][ind[i]].asscalar()))
+              print(f'\t{pred_obj}, with probability {math.floor(pred_score*1000)/1000}')
 
             save_data[os.path.basename(images)][i+1]['class'] = classes[ind[i].asscalar()]
             save_data[os.path.basename(images)][i+1]['confidence'] = str(nd.softmax(pred)[0][ind[i]].asscalar())
