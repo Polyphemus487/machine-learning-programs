@@ -52,10 +52,8 @@ def get_args():
 opt = get_args()
 
 # Takes in what directory the user wants the outputs saved too, if wanted
-directory = input('Choose a directory to save the file too (only list folders, ' +
-                  'the next input will be the file name): ') if opt.save_to_file else None
-
-file_name = input('Choose a file name  (do not include the extension): ') if opt.save_to_file else None
+directory = input('Choose a directory to save the file too (include final file, but no extension): ') \
+    if opt.save_to_file else None
 
 # Load Model
 model_name = opt.model
@@ -77,18 +75,22 @@ pictures = []
 def find_all_images(input_file=None):
     # Attempts scan the file provided, seeing if it is a folder
     for file in os.scandir(opt.input_fldr if input_file is None else input_file):
-        try:
-            # If inputed true, this code will recurse through any folders in the provided folder
-            for files in os.scandir(file):
-                if opt.extra_fldrs:
-                    find_all_images(os.path.abspath(files))
+        file = os.path.abspath(file)
 
-        # If the file inputed isn't a folder, then it adds it the picture array
+        try:
+            # Checks if the input is a folder
+            os.scandir(file)
+
+        # If the file input isn't a folder, then it adds it the picture array
         except Exception:
             # Grabs the non-folder file extension and checks if it is one of the images types listed
             name, ext = os.path.splitext(os.path.basename(file))
-            if ext in ['.jpeg', '.jpg', '.png']:
+            if ext in ('.JPEG', '.jpg', '.png', '.jpeg'):
                 pictures.append(file)
+
+        # If the input is a folder, then run this same function on the newly found folder
+        else:
+            find_all_images(file)
 
 
 # Predicts the images
@@ -105,7 +107,8 @@ def pred_images():
         # Updates to the right directory
         os.chdir(os.path.dirname(images))
 
-        save_data[os.path.basename(images)] = {rank + 1: {} for rank in range(opt.top_k)}
+        # Create the dictionary to hold all the classes and confidences
+        save_data[images] = {}
 
         # Load Images
         img = image.imread(os.path.basename(images))
@@ -119,32 +122,38 @@ def pred_images():
         # Prints the prediction
         ind = nd.topk(pred, k=opt.top_k)[0].astype('int')
 
-        for i in range(opt.top_k):
-            pred_obj = classes[ind[i].asscalar()]
-            pred_score = nd.softmax(pred)[0][ind[i]].asscalar()
+        if opt.display_in_terminal:
+            for i in range(opt.top_k):
+                pred_obj = classes[ind[i].asscalar()]
+                pred_score = nd.softmax(pred)[0][ind[i]].asscalar()
 
-            if opt.display_in_terminal:
                 if i == 0:
                     print(f'\n{os.path.basename(images)} is classified to be:')
 
-            print(f'\t{pred_obj}, with probability {math.floor(pred_score * 1000) / 1000}')
+                print(f'\t{pred_obj}, with probability {math.floor(pred_score * 1000) / 1000}')
 
-            save_data[os.path.basename(images)][i + 1]['class'] = classes[ind[i].asscalar()]
-            save_data[os.path.basename(images)][i + 1]['confidence'] = str(nd.softmax(pred)[0][ind[i]].asscalar())
+        # Now goes through through each class and gets the confidence
+        ind = nd.topk(pred, k=1000)[0].astype('int')
+
+        for simple in range(1000):
+            pred_obj = classes[ind[simple].asscalar()].replace(' ', '_')
+            pred_score = nd.softmax(pred)[0][ind[simple]].asscalar()
+
+            save_data[images][pred_obj] = pred_score
 
     # Saves the results to a json file (if requested to do so)
     if opt.save_to_file:
         try:
-            os.mkdir(directory)
+            os.mkdir(os.path.dirname(directory))
         except FileExistsError:
             # Nothing will happen if the file exists because it will simply put it in that directory
             pass
 
         # Sets the proper directory
-        os.chdir(directory)
+        os.chdir(os.path.dirname(directory))
 
         # Saves the data
-        with open(file_name + ".json", "w") as file_obj:
+        with open(os.path.basename(directory) + ".json", "w") as file_obj:
             json.dump(save_data, file_obj, indent=2, sort_keys=True)
 
 
