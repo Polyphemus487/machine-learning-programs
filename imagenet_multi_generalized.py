@@ -8,6 +8,7 @@ from gluoncv.data import ImageNet1kAttr
 from gluoncv.data.transforms.presets.imagenet import transform_eval
 from gluoncv.model_zoo import get_model
 from mxnet import nd, image
+from nltk.corpus import wordnet as wn
 
 
 # Takes a string and makes it a boolean
@@ -24,7 +25,7 @@ def str2bool(v):
 
 # Terminal command inputs
 def get_args():
-    parser = argparse.ArgumentParser(description='Predict ImageNet classes for inputed images')
+    parser = argparse.ArgumentParser(description='Predict ImageNet classes for the input images')
     parser.add_argument('--model', type=str, required=True,
                         help='name of the model to use')
 
@@ -35,16 +36,19 @@ def get_args():
                         help='path to the input picture')
 
     parser.add_argument('--extra-fldrs', type=str2bool, default=False,
-                        help='Make `True` if you want subfolders to be searched')
+                        help='Make `True` if you want sub folders to be searched')
 
     parser.add_argument('--save-to-file', type=str2bool, default=False,
                         help='Set to `True` to save the results to a json file')
 
     parser.add_argument('--display-in-terminal', type=str2bool, default=True,
-                        help='Set to `False` to have it not displayed in the console')
+                        help='Set to `False` to have results not displayed in the console')
 
     parser.add_argument('--top-k', type=int, default=5,
                         help='The number of rankings you want displayed')
+
+    parser.add_argument('--general-classes', type=str, default='base',
+                        help='The directory to a txt file that holds the names of the generalized classes you want.')
 
     return parser.parse_args()
 
@@ -70,6 +74,20 @@ else:
 # Stores the saved picture directories
 pictures = []
 
+# Holds all the info for the general classes
+if opt.general_classes != 'base':
+    with open(opt.general_classes, 'r') as f_classes:
+        pass
+else:
+    general_classes = ['airplane', 'antelope', 'bear', 'bicycle', 'bird', 'bus', 'car',
+                       'cattle', 'dog', 'domestic_cat', 'elephant', 'entity', 'fox', 'giant_panda',
+                       'hamster', 'horse', 'lion', 'lizard', 'monkey', 'motorcycle', 'rabbit',
+                       'red_panda', 'sheep', 'snake', 'squirrel', 'tiger', 'train', 'turtle',
+                       'watercraft', 'whale', 'zebra']
+
+general_class = 'entity'
+index = 100000
+
 
 # Recurses through folders
 def find_all_images(input_file=None):
@@ -93,6 +111,54 @@ def find_all_images(input_file=None):
             find_all_images(file)
 
 
+# Recurses through a given prediction and finds a simplified version
+def word_net_simplification(word):
+    # Locate global variables used
+    global index
+    global general_class
+
+    index = 100000
+    general_class = 'entity'
+
+    # If the guess is already one of the classes, stop and return it
+    if word in general_classes:
+        return word
+
+    # the recursive function
+    def find_general_class(synset, loop):
+        # Locate global variables used
+        global index
+        global general_class
+
+        # Increases a variable to be equal to what tree level the function is on
+        loop += 1
+
+        # Takes the input word that is less specific than the word it was derived from loops through related words
+        for related_word in synset.lemma_names():
+            # Checks if the related word is one of the classes
+            if related_word in general_classes:
+                # If the root prediction has already gotten a word, this checks if the new one is lower on the tree
+                if loop < index:
+                    # Changes the function output to the new word and decreases the required tree level
+                    general_class = related_word
+                    index = loop
+                # Stops the searching in this branch
+                return True
+
+        # Takes the inputed word and runs this same function on the new, more vague words.
+        for hypernym in synset.hypernyms():
+            # If this branch has found a match in the classes, stop the search
+            if find_general_class(hypernym, loop):
+                break
+
+    # Starts the recursion from the original prediction
+    synsets = wn.synsets(word)
+    for synset in synsets:
+        find_general_class(synset, 0)
+
+    return general_class
+
+
 # Predicts the images
 def pred_images():
     # Get the image directories
@@ -103,11 +169,12 @@ def pred_images():
 
     # Loops through all images
     for images in pictures:
+
         # Updates to the right directory
         os.chdir(os.path.dirname(images))
 
         # Create the dictionary to hold all the classes and confidences
-        save_data[images] = {}
+        save_data[images] = {general: 0 for general in general_classes}
 
         # Load Images
         img = image.imread(os.path.basename(images))
@@ -130,15 +197,16 @@ def pred_images():
                     print(f'\n{os.path.basename(images)} is classified to be:')
 
                 print(f'\t{pred_obj}, with probability {math.floor(pred_score * 1000) / 1000}')
+                print('\t\tGeneralized class: '+word_net_simplification(pred_obj.replace(' ', '_')))
 
         # Now goes through through each class and gets the confidence
         ind = nd.topk(pred, k=1000)[0].astype('int')
 
         for simple in range(1000):
-            pred_obj = classes[ind[simple].asscalar()].replace(' ', '_')
+            pred_obj = word_net_simplification(classes[ind[simple].asscalar()].replace(' ', '_'))
             pred_score = nd.softmax(pred)[0][ind[simple]].asscalar()
 
-            save_data[images][pred_obj] = pred_score
+            save_data[images][pred_obj] += pred_score
 
     # Saves the results to a json file (if requested to do so)
     if opt.save_to_file:
