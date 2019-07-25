@@ -1,4 +1,7 @@
 # Imports
+from datetime import datetime
+startime = datetime.now()
+
 import argparse
 import json
 import math
@@ -53,6 +56,7 @@ def get_args():
     return parser.parse_args()
 
 
+
 opt = get_args()
 
 # Takes in what directory the user wants the outputs saved too, if wanted
@@ -77,7 +81,11 @@ pictures = []
 # Holds all the info for the general classes
 if opt.general_classes != 'base':
     with open(opt.general_classes, 'r') as f_classes:
-        pass
+        general_classes = [file_class.strip('\n') for file_class in f_classes]
+
+    if 'entity' not in general_classes:
+        general_classes.append('entity')
+        print("Adding 'entity' to your list of general classes as a catch-all class")
 else:
     general_classes = ['airplane', 'antelope', 'bear', 'bicycle', 'bird', 'bus', 'car',
                        'cattle', 'dog', 'domestic_cat', 'elephant', 'entity', 'fox', 'giant_panda',
@@ -134,22 +142,20 @@ def word_net_simplification(word):
         loop += 1
 
         # Takes the input word that is less specific than the word it was derived from loops through related words
-        for related_word in synset.lemma_names():
+        for related_word_general in synset.lemma_names():
             # Checks if the related word is one of the classes
-            if related_word in general_classes:
+            if related_word_general in general_classes:
                 # If the root prediction has already gotten a word, this checks if the new one is lower on the tree
                 if loop < index:
                     # Changes the function output to the new word and decreases the required tree level
-                    general_class = related_word
+                    general_class = related_word_general
                     index = loop
                 # Stops the searching in this branch
                 return True
 
         # Takes the inputed word and runs this same function on the new, more vague words.
-        for hypernym in synset.hypernyms():
-            # If this branch has found a match in the classes, stop the search
-            if find_general_class(hypernym, loop):
-                break
+        for relation in synset.hypernyms():
+            find_general_class(relation, loop)
 
     # Starts the recursion from the original prediction
     synsets = wn.synsets(word)
@@ -213,7 +219,7 @@ def pred_images():
         try:
             os.mkdir(os.path.dirname(directory))
         except FileExistsError:
-            # Nothing will happen if the file exists because it will simply put it in that directory
+            # Nothing will happen if the path exists because it will simply put it in that directory
             pass
 
         # Sets the proper directory
@@ -222,6 +228,8 @@ def pred_images():
         # Saves the data
         with open(os.path.basename(directory) + ".json", "w") as file_obj:
             json.dump(save_data, file_obj, indent=2, sort_keys=True)
+
+    print(datetime.now()-startime/1000)
 
 
 pred_images()
