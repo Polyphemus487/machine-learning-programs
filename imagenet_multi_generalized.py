@@ -1,7 +1,5 @@
 # Imports
-from datetime import datetime
-startime = datetime.now()
-
+import time
 import argparse
 import json
 import math
@@ -54,7 +52,6 @@ def get_args():
                         help='The directory to a txt file that holds the names of the generalized classes you want.')
 
     return parser.parse_args()
-
 
 
 opt = get_args()
@@ -165,6 +162,9 @@ def word_net_simplification(word):
     return general_class
 
 
+startime = time.time()
+
+
 # Predicts the images
 def pred_images():
     # Get the image directories
@@ -203,7 +203,7 @@ def pred_images():
                     print(f'\n{os.path.basename(images)} is classified to be:')
 
                 print(f'\t{pred_obj}, with probability {math.floor(pred_score * 1000) / 1000}')
-                print('\t\tGeneralized class: '+word_net_simplification(pred_obj.replace(' ', '_')))
+                print(f'\t\tGeneralized class: '+word_net_simplification(pred_obj.replace(' ', '_')))
 
         # Now goes through through each class and gets the confidence
         ind = nd.topk(pred, k=1000)[0].astype('int')
@@ -229,7 +229,8 @@ def pred_images():
         with open(os.path.basename(directory) + ".json", "w") as file_obj:
             json.dump(save_data, file_obj, indent=2, sort_keys=True)
 
-    print(datetime.now()-startime/1000)
+    endtime = time.time()
+    print(f'{endtime-startime}')
 
 
 pred_images()
