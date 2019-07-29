@@ -1,4 +1,5 @@
 # Imports
+import time
 import argparse
 import json
 import math
@@ -93,6 +94,9 @@ def find_all_images(input_file=None):
             find_all_images(file)
 
 
+start_time = time.time()
+
+
 # Predicts the images
 def pred_images():
     # Get the image directories
@@ -154,6 +158,9 @@ def pred_images():
         # Saves the data
         with open(os.path.basename(directory) + ".json", "w") as file_obj:
             json.dump(save_data, file_obj, indent=2, sort_keys=True)
+
+    endtime = time.time()
+    print(f'{endtime - startime}')
 
 
 pred_images()
