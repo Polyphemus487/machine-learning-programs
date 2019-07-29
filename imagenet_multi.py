@@ -94,11 +94,11 @@ def find_all_images(input_file=None):
             find_all_images(file)
 
 
-start_time = time.time()
-
-
 # Predicts the images
 def pred_images():
+    # Start time
+    start_time = time.time()
+
     # Get the image directories
     find_all_images()
 
@@ -159,8 +159,9 @@ def pred_images():
         with open(os.path.basename(directory) + ".json", "w") as file_obj:
             json.dump(save_data, file_obj, indent=2, sort_keys=True)
 
+    # Display time to run
     endtime = time.time()
-    print(f'{endtime - startime}')
+    print(f'{endtime - start_time}')
 
 
 pred_images()
