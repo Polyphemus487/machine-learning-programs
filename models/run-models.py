@@ -8,7 +8,7 @@ def run_through_models():
         print(model)
         os.system(f'python imagenet_multi_generalized.py --model {model} --input-fldr /Users/sam/imagenet' \
                   +f'-vid-robust-example-master/imagenet-vid-robust/val --save-to-file /Users/sam/save-results/{model}'\
-                  +'full --display-in-terminal False')
+                  +'_full --display-in-terminal False')
 
 
 run_through_models()
